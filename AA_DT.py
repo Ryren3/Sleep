@@ -12,7 +12,7 @@ df = pd.read_csv('ai_impact_student_performance_dataset.csv')
 df = df.dropna()
 
 # df1 has no target variables
-'''X = df.drop(columns=['student_id', 'age','gender','grade_level','final_score','passed','performance_category'])
+X = df.drop(columns=['student_id', 'age','gender','grade_level','final_score','passed','performance_category'])
 
 x_cat = X.select_dtypes(include=['object']).columns
 
@@ -53,7 +53,7 @@ train_acc = dt_classifier.score(X_train, y_train)
 test_acc = dt_classifier.score(X_test, y_test)
 
 print("Train accuracy:", train_acc)
-print("Test accuracy:", test_acc)'''
+print("Test accuracy:", test_acc)
 
 '''
 sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
@@ -70,7 +70,7 @@ plt.show()'''
 
 # Decision tree with grid search
 
-'''print('='*80)
+print('='*80)
 print("Decision Tree with Grid Search")
 print('='*80)
 
@@ -130,7 +130,7 @@ importance_df = pd.DataFrame({
 }).sort_values('importance', ascending=False)
 
 print("\nTop 10 Features:")
-print(importance_df.head(10))'''
+print(importance_df.head(10))
 
 
 # AI related analysis
@@ -149,9 +149,9 @@ plt.title('Performance Category by AI Usage')
 plt.show()'''
 
 # Boxplot to show the relation between ai_generated content and performance category
-sns.boxplot(data=df_ai, x='ai_generated_content_percentage', y='performance_category')
+'''sns.boxplot(data=df_ai, x='ai_generated_content_percentage', y='performance_category')
 plt.title('AI Generated Content vs Performance Category')
-plt.show()
+plt.show()'''
 
 
 
