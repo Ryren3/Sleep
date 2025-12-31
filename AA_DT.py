@@ -4,27 +4,27 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.tree import plot_tree
 
 df = pd.read_csv('ai_impact_student_performance_dataset.csv')
 df = df.dropna()
+print(df)
+print('='*80)
+print(df.info())
+print('='*80)
+print(df.describe())
+print('='*80)
+
 
 # df1 has no target variables
 X = df.drop(columns=['student_id', 'age','gender','grade_level','final_score','passed','performance_category'])
 
 x_cat = X.select_dtypes(include=['object']).columns
 
-encoders = {}
-for col in x_cat:
-    le = LabelEncoder()
-    X[col] = le.fit_transform(X[col])
-    encoders[col] = le
-
-
-
-print(X)
 
 y_encoder = LabelEncoder()
 df['performance_category'] = y_encoder.fit_transform(df['performance_category'])
@@ -33,8 +33,21 @@ y = df['performance_category']  # Target variable
 # Split the dataset into training and testing sets
 X_train,X_test, y_train, y_test=train_test_split(X,y,test_size=0.2,random_state=42,stratify=y)
 
-# Initialize the Decision Tree Classifier
-dt_classifier = DecisionTreeClassifier(random_state=42,class_weight='balanced')
+# Encoding categorical variables
+cat_cols = X.select_dtypes(include=['object']).columns
+preprocessor = ColumnTransformer(transformers =[
+    ('cat', OneHotEncoder(handle_unknown='ignore'), cat_cols),
+], remainder='passthrough')
+
+# Pipeline with preprocessor and Decision Tree Classifier
+pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('classifier', DecisionTreeClassifier(random_state=42,class_weight='balanced'))
+])
+
+dt_classifier = pipeline
+
+
 # Train the model
 dt_classifier.fit(X_train, y_train)
 # Make predictions
@@ -75,15 +88,15 @@ print("Decision Tree with Grid Search")
 print('='*80)
 
 param_grid = {
-    'max_depth': [3, 5, 7, 10,11],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1,2,4],
-    'criterion': ['gini', 'entropy']
+    'classifier__max_depth': [3, 5, 7, 10,11],
+    'classifier__min_samples_split': [2, 5, 10],
+    'classifier__min_samples_leaf': [1,2,4],
+    'classifier__criterion': ['gini', 'entropy']
 }
 
-dt_classifier_gs = DecisionTreeClassifier(random_state=42,class_weight='balanced')
 
-grid_search = GridSearchCV(estimator=dt_classifier_gs, param_grid=param_grid, cv=5, n_jobs=-1, scoring='f1_macro')
+grid_search = GridSearchCV(estimator=dt_classifier, param_grid=param_grid, cv=5, n_jobs=-1, scoring='f1_macro')
+
 grid_search.fit(X_train, y_train)
 
 best_dt_classifier = grid_search.best_estimator_
@@ -112,25 +125,11 @@ print("Test accuracy:", test_acc_gs)
 print('='*80)
 print("Feature Importances for Initial Model:")
 print('='*80)
-importance_df_initial = pd.DataFrame({
-    'feature': X.columns,
-    'importance': dt_classifier.feature_importances_
-}).sort_values('importance', ascending=False)
-print("\nTop 10 Features:")
-print(importance_df_initial.head(10))
-
-
-
+feature_names = best_dt_classifier.named_steps['preprocessor'].get_feature_names_out()
+importances = best_dt_classifier.named_steps['classifier'].feature_importances_
+feature_df = pd.Series(importances, index = feature_names).sort_values(ascending=False)
+print(feature_df.head(10))
 print('='*80)
-print("Feature Importances for Grid Search Best Model:")
-print('='*80)
-importance_df = pd.DataFrame({
-    'feature': X.columns,
-    'importance': best_dt_classifier.feature_importances_
-}).sort_values('importance', ascending=False)
-
-print("\nTop 10 Features:")
-print(importance_df.head(10))
 
 
 # AI related analysis

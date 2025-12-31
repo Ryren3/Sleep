@@ -64,7 +64,12 @@ feature_df = pd.Series(importances, index = feature_names).sort_values(ascending
 print('Top 10 features:')
 print(feature_df.head(10))
 print('='*80)
+
+
+##################################################
 # XGBoost model with grid search
+##################################################
+
 
 param = {
     'classifier__n_estimators': [50, 100, 200],
