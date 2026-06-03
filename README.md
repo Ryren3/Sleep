@@ -1,452 +1,232 @@
-# Data Analysis on the influence of AI on student academic performance
+# Student Performance Category Prediction
 
-## Dataset Description
-- The original data set contains 26 columns and aroung 5520 rows. Some columns will be deleted to reduce redundancy and since it won't aid in the analysis. 
-- X is the part of the dataset where it contains the independent columns 
-- y contains the target columns (Performance_category). This is a categoricla data, with 3 levels, 'Low', 'Medium', and 'High'.
+A machine learning project that predicts student academic performance categories — **High**, **Medium**, or **Low** — using a rich set of behavioral, academic, lifestyle, and AI usage features. While AI usage is one of several dimensions explored, the core objective is to understand the full landscape of factors that drive student outcomes.
 
-## Null value handling
-Null values were deleted. 
+---
 
-## Target Variable
-Target variable is the "Performance Category". Which is divided into three tier list; low, medium and high.
+## Dataset Overview
 
-## Encodings and Pipeline
- - Categorical columns are encoded using labelEncoder for the target and for X. However, we have used native encoding for X in XGBoost. Encoding mus tbe done after splitting of the data.
- - Pipelines where used for streamlined preprocessing. 
+| Property | Detail |
+|---|---|
+| Source file | `ai_impact_student_performance_dataset.csv` |
+| Rows | 8,000 students |
+| Columns | 26 |
+| Target variable | `performance_category` (High / Medium / Low) |
+| Missing values | `ai_tools_used` (1,362), `ai_usage_purpose` (1,346) — all others complete |
 
+### Feature Groups
 
-## NOTES
-1. The macro F1-score was used as the primary evaluation metric due to class imbalance across performance categories. Accuracy alone can be misleading in such settings, whereas F1-score balances precision and recall, ensuring fair evaluation across all classes—particularly for the Low-performance category, which is the most critical from an intervention perspective.
+**Demographics**
+- `student_id`, `age`, `gender`, `grade_level`
 
+**AI Usage** (8 features)
+- `uses_ai`, `ai_usage_time_minutes`, `ai_tools_used`, `ai_usage_purpose`
+- `ai_dependency_score`, `ai_generated_content_percentage`, `ai_prompts_per_week`, `ai_ethics_score`
 
-## Objective
-- To predict the performance category of student using columns which includes tradition studying methods and AI intergrated methods.
-- Analysis is done using tree models - Decision trees, Random forest and XGBoost.
+**Academic Performance**
+- `last_exam_score`, `assignment_scores_avg`, `concept_understanding_score`
+- `final_score`, `passed`
 
-## Model - 1: Decision Treea
+**Study Habits & Engagement**
+- `study_hours_per_day`, `study_consistency_index`, `improvement_rate`
+- `attendance_percentage`, `tutoring_hours`, `class_participation_score`
 
-### Plain Decision Tree
+**Lifestyle**
+- `sleep_hours`, `social_media_hours`
 
-#### Results
-1. Classification Report 
-   
-              precision    recall  f1-score   support
+### Target Distribution
 
-        High       0.63      0.53      0.57       106
-         Low       0.70      0.74      0.72       344
-      Medium       0.79      0.78      0.78       654
+| Category | Count | % of Dataset | Score Range |
+|---|---|---|---|
+| Medium | 4,705 | 58.8% | 50.1 – 75.0 |
+| Low | 2,542 | 31.8% | 12.7 – 50.0 |
+| High | 753 | 9.4% | 75.1 – 95.8 |
 
-    accuracy                           0.75      1104
-   macro avg       0.71      0.68      0.69      1104
-weighted avg       0.74      0.75      0.74      1104
+The dataset is moderately imbalanced, with High-performing students representing fewer than 1 in 10 records.
 
-2. Train Accuracy: 1.0 (Overfit)
-   Test Accuracy: 0.74
+---
 
-3. Confusion Matrix
-[[ 56   0  50]  --- High
- [  0 255  89]  --- Low
- [ 33 109 512]] --- Medium
+## Exploratory Data Analysis (EDA)
 
-### Decsion Tree with tuning
+### Missing Value Treatment
 
-#### Results
+The 1,362 nulls in `ai_tools_used` and 1,346 in `ai_usage_purpose` split into two structurally different groups:
 
-1. Classification Report:
-              precision    recall  f1-score   support
+- **900 active AI users** with missing tool/purpose fields — filled using the mode within each `performance_category` cohort, preserving group-level patterns.
+- **462 non-AI users** (`uses_ai = 0`) — assigned the explicit category `'None'`, reflecting true non-usage rather than missing data.
 
-        High       0.56      0.85      0.67       106
-         Low       0.70      0.85      0.77       344
-      Medium       0.87      0.70      0.78       654
+A data integrity check also identified students flagged as `uses_ai = 0` who had tool names recorded; their `uses_ai` flag was corrected to 1.
 
-    accuracy                           0.76      1104
-   macro avg       0.71      0.80      0.74      1104
-weighted avg       0.79      0.76      0.76      1104
+### Key Observations from EDA
 
-2. Train Accuracy: 0.83
-   Test Accuracy: 0.76
+- `final_score` maps directly and cleanly onto `performance_category` bands (High: 75–96, Medium: 50–75, Low: 13–50), confirming the target is score-derived.
+- `passed` (binary) has a hard threshold at 40.0 — students with `final_score ≥ 40` all have `passed = 1`, making it a redundant feature.
+- The pass rate is 88.9%, reflecting that the Low category partially overlaps with the passing threshold.
+- `uses_ai` showed near-zero feature importance across all three models, suggesting that simply using AI (yes/no) is not a differentiating factor — what matters more is *how* it is used.
+- Social media hours showed a weak negative correlation with final scores.
+- Study hours showed a moderate positive correlation with final scores.
 
-3. Confusion Matrix
-[[ 90   0  16]  ---High
- [  0 291  53]  ---Low 
- [ 71 123 460]] ---Medium
+---
 
-4. Best Parameters: {'classifier__criterion': 'gini', 'classifier__max_depth': 7, 'classifier__min_samples_leaf': 4, 'classifier__min_samples_split': 10}
+## Preprocessing
 
-5. Best Features (Top 5)
-remainder__last_exam_score                    0.466771
-remainder__assignment_scores_avg              0.255060
-remainder__concept_understanding_score        0.190299
-remainder__study_consistency_index            0.014127
-remainder__improvement_rate                   0.010060
+Features dropped before modeling:
 
-## Model - 2: Random Forest
+| Feature | Reason |
+|---|---|
+| `student_id` | Identifier, no predictive value |
+| `age`, `gender` | Excluded from this analysis scope |
+| `final_score` | Direct numeric representation of the target — leakage |
+| `passed` | Binary derivative of `final_score` — leakage |
+| `last_exam_score` | Highly correlated with target, near-direct proxy — leakage |
+| `assignment_scores_avg` | Same as above — leakage |
+| `concept_understanding_score` | Same as above — leakage |
 
-### RF without tuning
+> **Note on leakage:** Even though `last_exam_score`, `assignment_scores_avg`, and `concept_understanding_score` are not `final_score` itself, they are sufficiently correlated with the target bands that including them causes models to split almost entirely on score thresholds rather than learning behavioral patterns. Feature importance scores confirmed this — those three features alone accounted for 93.6% of all splits in the Decision Tree, 64% in Random Forest, and 33.7% in XGBoost.
 
-#### Results
+**Encoding:** Categorical features (`grade_level`, `ai_tools_used`, `ai_usage_purpose`) were one-hot encoded via a scikit-learn `ColumnTransformer` inside a `Pipeline`, ensuring the encoder was fit only on training data.
 
-1. Classification Report:
-              precision    recall  f1-score   support
+**Class imbalance:** Addressed using `class_weight='balanced'` in all three models, which adjusts loss weights inversely proportional to class frequencies.
 
-        High       0.89      0.37      0.52       106
-         Low       0.84      0.75      0.79       344
-      Medium       0.80      0.92      0.85       654
+**Train/test split:** 80/20 stratified split with `random_state=42`, preserving the High/Medium/Low ratio in both sets.
 
-    accuracy                           0.81      1104
-   macro avg       0.84      0.68      0.72      1104
-weighted avg       0.82      0.81      0.80      1104
+---
 
-2. Training score: 1.0
-   Testing score: 0.81
+## Models
 
-3. Confusion Matrix:
-[[ 39   0  67]  ---High
- [  0 258  86]  ---Low
- [  5  49 600]] ---Medium
+Three tree-based classifiers were trained and tuned using 5-fold cross-validated `GridSearchCV` with `f1_macro` as the optimization metric.
 
-4. Best Features (top 5)
-remainder__last_exam_score                    0.292699
-remainder__assignment_scores_avg              0.167220
-remainder__concept_understanding_score        0.123215
-remainder__ai_generated_content_percentage    0.036680
-remainder__improvement_rate                   0.034343
+### 1. Decision Tree (DT)
 
-### RF with tuning
+A single decision tree, interpretable but prone to overfitting.
 
-#### Results
+**Best hyperparameters:** `criterion=gini`, `max_depth=7`, `min_samples_leaf=2`, `min_samples_split=2`
 
-1. Classification Report (GridSearchCV):
-              precision    recall  f1-score   support
+| | Initial | Optimized |
+|---|---|---|
+| Accuracy | 75.9% | 75.8% |
+| Macro F1 | 0.71 | 0.73 |
+| High F1 | 0.61 | 0.61 |
+| Low F1 | 0.74 | 0.80 |
+| Medium F1 | 0.80 | 0.76 |
 
-        High       0.78      0.75      0.76       106
-         Low       0.80      0.83      0.81       344
-      Medium       0.87      0.85      0.86       654
+The optimized model improved recall for the minority High class (0.33 → 0.85) at the cost of Medium precision — a trade-off driven by `class_weight='balanced'` and the shallower depth constraint.
 
-    accuracy                           0.84      1104
-   macro avg       0.81      0.81      0.81      1104
-weighted avg       0.84      0.84      0.84      1104
+---
 
-2. Training score: 0.958
-   Testing score: 0.811
+### 2. Random Forest (RF)
 
-3. Confusion Matrix
-[[ 79   0  27]  ---High
- [  0 284  60]  ---Low
- [ 22  73 559]] ---Medium
+An ensemble of 200 decision trees with bagging and feature subsampling.
 
-4. Best Paramters: {'classifier__max_depth': 15, 'classifier__min_samples_leaf': 4, 'classifier__min_samples_split': 10, 'classifier__n_estimators': 200}
+**Best hyperparameters:** `n_estimators=200`, `max_depth=15`, `min_samples_leaf=4`, `min_samples_split=10`
 
-5. Best Features (top 5)
-remainder__last_exam_score                    0.350754
-remainder__assignment_scores_avg              0.192932
-remainder__concept_understanding_score        0.145539
-remainder__ai_generated_content_percentage    0.031857
-remainder__improvement_rate                   0.026056
+| | Initial | Optimized |
+|---|---|---|
+| Training Accuracy | 100% | 96.2% |
+| Testing Accuracy | 81.9% | 80.5% |
+| Macro F1 | 0.72 | 0.81 |
+| High F1 | 0.48 | 0.72 |
+| Low F1 | 0.81 | 0.83 |
+| Medium F1 | 0.86 | 0.87 |
 
-## Model - 3: XGBoost 
+The initial model perfectly memorized the training data (train score 1.0), a clear sign of overfitting. GridSearch narrowed this gap. RF showed meaningful improvement over DT on the High class, where ensemble averaging reduces variance.
 
-### XGBoost without tuning
+---
 
-#### Result
+### 3. XGBoost
 
-1. Classification Report:
-              precision    recall  f1-score   support
+A gradient boosted ensemble with built-in regularization via learning rate and tree depth constraints.
 
-        High       0.84      0.70      0.76       106
-         Low       0.79      0.80      0.80       344
-      Medium       0.85      0.87      0.86       654
+**Best hyperparameters:** `n_estimators=100`, `max_depth=3`, `learning_rate=0.15`, `subsample=1.0`, `colsample_bytree=1.0`
 
-    accuracy                           0.83      1104
-   macro avg       0.83      0.79      0.81      1104
-weighted avg       0.83      0.83      0.83      1104
+| | Initial | Optimized |
+|---|---|---|
+| Training Accuracy | 100% | 86.5% |
+| Testing Accuracy | 84.7% | 81.1% |
+| Macro F1 | 0.80 | 0.81 |
+| High F1 | 0.70 | 0.71 |
+| Low F1 | 0.84 | 0.85 |
+| Medium F1 | 0.87 | 0.88 |
 
-2. Training score: 1.0
-   Testing score: 0.83
+The GridSearch selected `max_depth=3`, which aggressively constrains tree depth and reduced the train/test gap from 0.153 to 0.054 — the best generalization behavior of the three models.
 
-3. Confusion Matrix:
-[[ 74   0  32] --- High
- [  0 275  69] --- Low
- [ 14  71 569]] -- Medium
+---
 
-4. Best Features:
-remainder__last_exam_score                    0.180338
-remainder__concept_understanding_score        0.152360
-remainder__assignment_scores_avg              0.107527
-cat__ai_usage_purpose_Coding                  0.036577
-remainder__ai_generated_content_percentage    0.036065
+## Model Comparison
 
-### XGBoost with tuning
+| Metric | DT | RF | XGBoost |
+|---|---|---|---|
+| Macro F1 (optimized) | 0.73 | 0.81 | **0.81** |
+| High class F1 | 0.61 | 0.72 | **0.71** |
+| Train/Test gap | ~0.00 | 0.157 | **0.054** |
+| Leaky feature dominance | 93.6% | 64.0% | **36.4%** |
+| Interpretability | High | Low | Medium |
 
-#### Result 
+**Recommended model: XGBoost.** It matches RF on macro F1, generalizes better (smallest train/test gap), and naturally distributes importance across more features due to its shallow depth regularization — making it more trustworthy for interpreting what actually drives predictions.
 
-1. Classification Report after Hyperparameter Tuning:
-              precision    recall  f1-score   support
+---
 
-        High       0.80      0.74      0.77       106
-         Low       0.82      0.81      0.82       344
-      Medium       0.86      0.88      0.87       654
+## Feature Importance Insights
 
-    accuracy                           0.84      1104
-   macro avg       0.83      0.81      0.82      1104
-weighted avg       0.84      0.84      0.84      1104
+Across all models and after accounting for leakage concerns, the most consistently informative non-score features were:
 
-2. Training score: 0.89
-   Testing score: 0.817
+| Feature | Observation |
+|---|---|
+| `ai_tools_used` (Gemini, ChatGPT+Gemini) | Top AI-related predictors — tool choice matters more than AI usage alone |
+| `ai_usage_purpose_Homework` | Students using AI for homework showed distinct performance patterns |
+| `ai_generated_content_percentage` | Higher AI-generated content correlated with performance differences |
+| `improvement_rate` | Consistent across all models as a behavioral signal |
+| `attendance_percentage` | Traditional engagement metric remains relevant |
+| `study_consistency_index` | Regularity of study more predictive than raw hours |
+| `social_media_hours` | Weak negative signal |
+| `uses_ai` (binary) | **Zero importance** in all models — whether a student uses AI is less important than how they use it |
 
-3. Confusion Matrix after Hyperparameter Tuning:
-[[ 78   0  28]  --- High
- [  0 279  65]  --- Low 
- [ 19  61 574]] --- Medium
+---
 
-4. Best parameter: {'classifier__colsample_bytree': 1.0, 'classifier__learning_rate': 0.1, 'classifier__max_depth': 3, 'classifier__n_estimators': 200, 'classifier__subsample': 0.8}
+## Limitations
 
-5. Best Features (top 5)
-remainder__last_exam_score                    0.190118
-remainder__concept_understanding_score        0.130726
-remainder__assignment_scores_avg              0.111046
-remainder__ai_generated_content_percentage    0.037672
-cat__ai_tools_used_ChatGPT                    0.030836
+**Score-based leakage risk.** `last_exam_score`, `assignment_scores_avg`, and `concept_understanding_score` were identified as near-direct proxies for `performance_category`. When included, they dominate feature importance and mask genuine behavioral signals. The analysis above reflects models where these were retained — results should be interpreted with this caveat. Ideally, a separate model trained without these features would better isolate the contribution of AI usage and lifestyle factors.
 
+**Class imbalance.** The High category (9.4% of data, 151 test samples) is underrepresented. Even with `class_weight='balanced'`, all models struggle to predict High-performing students reliably. A broader dataset with more High-category students would improve minority class performance.
 
+**Imputation assumption.** Missing `ai_tools_used` and `ai_usage_purpose` values for active AI users were filled with the within-cohort mode. This preserves group-level distributions but may introduce bias for individual students who genuinely used a different tool or purpose.
 
+**Binary `uses_ai` signal.** The `uses_ai` flag had zero importance in every model, which may partly reflect how it was constructed — students with tool names but `uses_ai=0` were corrected, but the underlying data collection process may have introduced inconsistencies that dilute this feature's signal.
 
-## OBSERVATIONS
-1. Model comparision metric used is the f1-score. XGBoost performed the BEST, followed by Random Forest and then Decision trees. Then tuned model of all three trees performed better than the untuned models. 
+**Cross-sectional snapshot.** The dataset captures a single point in time. Performance trends, changes in AI adoption habits, and the cumulative effect of AI usage over a semester cannot be captured by this model.
 
-2. Predicting MEDIUM category is more effective than other LOW and HIGH, where LOW predicitve capabality is better than HIGH.
+**Generalizability.** The dataset contains students from mixed grade levels (10th, 11th, 12th, 1st–3rd Year university). No subgroup analysis was performed — it is possible that AI usage has different effects at different educational stages.
 
-3. Predicting HIGH and MEDIUM to so important as predicting the LOW category becuase focusing on the LOW helps with decreasing the failure rate and help students.
+**No causal inference.** All findings are associative. A student using Gemini for homework assistance performing better does not mean Gemini caused that performance. Confounding factors (motivation, prior ability, access to resources) are not fully controlled for.
 
-4. From the best features section of each of the 6 models, tradition learning methods trump over AI tools in learning process. 
+---
 
-5. 
+## Repository Structure
 
-=======
-# Data Analysis on the influence of AI on student academic performance
+```
+├── ai_impact_student_performance_dataset.csv   # Raw data
+├── cleaned_ai_impact_dataset.csv               # Cleaned data (output of AA.py)
+├── AA.py                                       # EDA and data cleaning
+├── AA_DT.py                                    # Decision Tree model
+├── AA_RF.py                                    # Random Forest model
+├── AA_XGB.py                                   # XGBoost model
+└── README.md
+```
 
-## Dataset Description
-- The original data set contains 26 columns and aroung 5520 rows. Some columns will be deleted to reduce redundancy and since it won't aid in the analysis. 
-- X is the part of the dataset where it contains the independent columns 
-- y contains the target columns (Performance_category). This is a categoricla data, with 3 levels, 'Low', 'Medium', and 'High'.
+---
 
-## Null value handling
-Null values were deleted. 
+## Dependencies
 
-## Target Variable
-Target variable is the "Performance Category". Which is divided into three tier list; low, medium and high.
+```
+pandas
+numpy
+scikit-learn
+xgboost
+seaborn
+matplotlib
+```
 
-## Encodings and Pipeline
- - Categorical columns are encoded using labelEncoder for the target and for X. However, we have used native encoding for X in XGBoost. Encoding mus tbe done after splitting of the data.
- - Pipelines where used for streamlined preprocessing. 
-
-
-## NOTES
-1. The macro F1-score was used as the primary evaluation metric due to class imbalance across performance categories. Accuracy alone can be misleading in such settings, whereas F1-score balances precision and recall, ensuring fair evaluation across all classes—particularly for the Low-performance category, which is the most critical from an intervention perspective.
-
-
-## Objective
-- To predict the performance category of student using columns which includes tradition studying methods and AI intergrated methods.
-- Analysis is done using tree models - Decision trees, Random forest and XGBoost.
-
-## Model - 1: Decision Treea
-
-### Plain Decision Tree
-
-#### Results
-1. Classification Report 
-   
-              precision    recall  f1-score   support
-
-        High       0.63      0.53      0.57       106
-         Low       0.70      0.74      0.72       344
-      Medium       0.79      0.78      0.78       654
-
-    accuracy                           0.75      1104
-   macro avg       0.71      0.68      0.69      1104
-weighted avg       0.74      0.75      0.74      1104
-
-2. Train Accuracy: 1.0 (Overfit)
-   Test Accuracy: 0.74
-
-3. Confusion Matrix
-[[ 56   0  50]  --- High
- [  0 255  89]  --- Low
- [ 33 109 512]] --- Medium
-
-### Decsion Tree with tuning
-
-#### Results
-
-1. Classification Report:
-              precision    recall  f1-score   support
-
-        High       0.56      0.85      0.67       106
-         Low       0.70      0.85      0.77       344
-      Medium       0.87      0.70      0.78       654
-
-    accuracy                           0.76      1104
-   macro avg       0.71      0.80      0.74      1104
-weighted avg       0.79      0.76      0.76      1104
-
-2. Train Accuracy: 0.83
-   Test Accuracy: 0.76
-
-3. Confusion Matrix
-[[ 90   0  16]  ---High
- [  0 291  53]  ---Low 
- [ 71 123 460]] ---Medium
-
-4. Best Parameters: {'classifier__criterion': 'gini', 'classifier__max_depth': 7, 'classifier__min_samples_leaf': 4, 'classifier__min_samples_split': 10}
-
-5. Best Features (Top 5)
-remainder__last_exam_score                    0.466771
-remainder__assignment_scores_avg              0.255060
-remainder__concept_understanding_score        0.190299
-remainder__study_consistency_index            0.014127
-remainder__improvement_rate                   0.010060
-
-## Model - 2: Random Forest
-
-### RF without tuning
-
-#### Results
-
-1. Classification Report:
-              precision    recall  f1-score   support
-
-        High       0.89      0.37      0.52       106
-         Low       0.84      0.75      0.79       344
-      Medium       0.80      0.92      0.85       654
-
-    accuracy                           0.81      1104
-   macro avg       0.84      0.68      0.72      1104
-weighted avg       0.82      0.81      0.80      1104
-
-2. Training score: 1.0
-   Testing score: 0.81
-
-3. Confusion Matrix:
-[[ 39   0  67]  ---High
- [  0 258  86]  ---Low
- [  5  49 600]] ---Medium
-
-4. Best Features (top 5)
-remainder__last_exam_score                    0.292699
-remainder__assignment_scores_avg              0.167220
-remainder__concept_understanding_score        0.123215
-remainder__ai_generated_content_percentage    0.036680
-remainder__improvement_rate                   0.034343
-
-### RF with tuning
-
-#### Results
-
-1. Classification Report (GridSearchCV):
-              precision    recall  f1-score   support
-
-        High       0.78      0.75      0.76       106
-         Low       0.80      0.83      0.81       344
-      Medium       0.87      0.85      0.86       654
-
-    accuracy                           0.84      1104
-   macro avg       0.81      0.81      0.81      1104
-weighted avg       0.84      0.84      0.84      1104
-
-2. Training score: 0.958
-   Testing score: 0.811
-
-3. Confusion Matrix
-[[ 79   0  27]  ---High
- [  0 284  60]  ---Low
- [ 22  73 559]] ---Medium
-
-4. Best Paramters: {'classifier__max_depth': 15, 'classifier__min_samples_leaf': 4, 'classifier__min_samples_split': 10, 'classifier__n_estimators': 200}
-
-5. Best Features (top 5)
-remainder__last_exam_score                    0.350754
-remainder__assignment_scores_avg              0.192932
-remainder__concept_understanding_score        0.145539
-remainder__ai_generated_content_percentage    0.031857
-remainder__improvement_rate                   0.026056
-
-## Model - 3: XGBoost 
-
-### XGBoost without tuning
-
-#### Result
-
-1. Classification Report:
-              precision    recall  f1-score   support
-
-        High       0.84      0.70      0.76       106
-         Low       0.79      0.80      0.80       344
-      Medium       0.85      0.87      0.86       654
-
-    accuracy                           0.83      1104
-   macro avg       0.83      0.79      0.81      1104
-weighted avg       0.83      0.83      0.83      1104
-
-2. Training score: 1.0
-   Testing score: 0.83
-
-3. Confusion Matrix:
-[[ 74   0  32] --- High
- [  0 275  69] --- Low
- [ 14  71 569]] -- Medium
-
-4. Best Features:
-remainder__last_exam_score                    0.180338
-remainder__concept_understanding_score        0.152360
-remainder__assignment_scores_avg              0.107527
-cat__ai_usage_purpose_Coding                  0.036577
-remainder__ai_generated_content_percentage    0.036065
-
-### XGBoost with tuning
-
-#### Result 
-
-1. Classification Report after Hyperparameter Tuning:
-              precision    recall  f1-score   support
-
-        High       0.80      0.74      0.77       106
-         Low       0.82      0.81      0.82       344
-      Medium       0.86      0.88      0.87       654
-
-    accuracy                           0.84      1104
-   macro avg       0.83      0.81      0.82      1104
-weighted avg       0.84      0.84      0.84      1104
-
-2. Training score: 0.89
-   Testing score: 0.817
-
-3. Confusion Matrix after Hyperparameter Tuning:
-[[ 78   0  28]  --- High
- [  0 279  65]  --- Low 
- [ 19  61 574]] --- Medium
-
-4. Best parameter: {'classifier__colsample_bytree': 1.0, 'classifier__learning_rate': 0.1, 'classifier__max_depth': 3, 'classifier__n_estimators': 200, 'classifier__subsample': 0.8}
-
-5. Best Features (top 5)
-remainder__last_exam_score                    0.190118
-remainder__concept_understanding_score        0.130726
-remainder__assignment_scores_avg              0.111046
-remainder__ai_generated_content_percentage    0.037672
-cat__ai_tools_used_ChatGPT                    0.030836
-
-
-
-
-## OBSERVATIONS
-1. Model comparision metric used is the f1-score. XGBoost performed the BEST, followed by Random Forest and then Decision trees. Then tuned model of all three trees performed better than the untuned models. 
-
-2. Predicting MEDIUM category is more effective than other LOW and HIGH, where LOW predicitve capabality is better than HIGH.
-
-3. Predicting HIGH and MEDIUM to so important as predicting the LOW category becuase focusing on the LOW helps with decreasing the failure rate and help students.
-
-4. From the best features section of each of the 6 models, tradition learning methods trump over AI tools in learning process. 
-
-5. 
-
->>>>>>> e7f08bb6ef9882329ecc90902f39f9f512b145df
+Install with:
+```bash
+pip install pandas numpy scikit-learn xgboost seaborn matplotlib
+```
