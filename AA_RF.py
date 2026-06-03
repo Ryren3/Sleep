@@ -10,9 +10,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.tree import plot_tree
 
-df = pd.read_csv('ai_impact_student_performance_dataset.csv')
-df = df.dropna()
-df1 = df.drop(columns=['student_id', 'age','gender','grade_level','final_score','passed','performance_category'])
+df = pd.read_csv('cleaned_ai_impact_dataset.csv')
+
+for col in df.columns:
+    if pd.api.types.is_string_dtype(df[col]):
+        df[col] = df[col].astype('object')
+
+df1 = df.drop(columns=['student_id', 'age','gender','final_score','passed','performance_category'])
 
 X = df1
 
@@ -23,7 +27,7 @@ y = df['performance_category']  # Target variable
 X_train, X_test,y_train, y_test = train_test_split(X,y,test_size=0.2,random_state=42,stratify=y)
 
 # Encoding using piipeline
-cat_cols = X.select_dtypes(include=['object']).columns
+cat_cols = list(X.select_dtypes(include=['object']).columns)
 
 Preprocessor = ColumnTransformer(
     transformers=[

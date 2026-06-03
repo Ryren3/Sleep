@@ -10,8 +10,18 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.tree import plot_tree
 
-df = pd.read_csv('ai_impact_student_performance_dataset.csv')
-df = df.dropna()
+# 1. Ingest clean dataset
+df = pd.read_csv('cleaned_ai_impact_dataset.csv')
+
+# ==============================================================================
+# 🔥 FIX FOR PANDAS 3.0 & SCIKIT-LEARN TYPE MISMATCH:
+# Find all columns that are read as 'string' or 'object' and cast them explicitly
+# to standard 'object' so scikit-learn's underlying C-extensions can parse them.
+# ==============================================================================
+for col in df.columns:
+    if pd.api.types.is_string_dtype(df[col]):
+        df[col] = df[col].astype('object')
+
 print(df)
 print('='*80)
 print(df.info())
@@ -19,141 +29,117 @@ print('='*80)
 print(df.describe())
 print('='*80)
 
+# 2. Separate Features and Targets (Dropping target leakage metrics)
+X = df.drop(columns=['age','gender','student_id', 'final_score', 'passed', 'performance_category'])
 
-# df1 has no target variables
-X = df.drop(columns=['student_id', 'age','gender','grade_level','final_score','passed','performance_category'])
+X = X.astype({
+    col: 'object'
+    for col in X.select_dtypes(include=['string']).columns
+})
 
-x_cat = X.select_dtypes(include=['object']).columns
-
-
+print(pd.crosstab(df['uses_ai'], df['performance_category'], normalize='index') * 100)
+'''# 3. Target Variable Label Encoding
 y_encoder = LabelEncoder()
 df['performance_category'] = y_encoder.fit_transform(df['performance_category'])
-y = df['performance_category']  # Target variable
+y = df['performance_category']  
 
-# Split the dataset into training and testing sets
-X_train,X_test, y_train, y_test=train_test_split(X,y,test_size=0.2,random_state=42,stratify=y)
+# 4. Stratified Split to preserve class distributions
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# Encoding categorical variables
-cat_cols = X.select_dtypes(include=['object']).columns
-preprocessor = ColumnTransformer(transformers =[
-    ('cat', OneHotEncoder(handle_unknown='ignore'), cat_cols),
+# 5. Extract our safe 'object' text features for the preprocessor
+cat_cols = list(X.select_dtypes(include=['object']).columns)
+
+# 6. Build the Column Preprocessor Pipeline
+preprocessor = ColumnTransformer(transformers=[
+    ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), cat_cols),
 ], remainder='passthrough')
 
-# Pipeline with preprocessor and Decision Tree Classifier
+# 7. Initialize Pipeline
 pipeline = Pipeline(steps=[
     ('preprocessor', preprocessor),
-    ('classifier', DecisionTreeClassifier(random_state=42,class_weight='balanced'))
+    ('classifier', DecisionTreeClassifier(random_state=42, class_weight='balanced'))
 ])
 
-dt_classifier = pipeline
+# 8. Train Initial Model (This will now run completely error-free!)
+pipeline.fit(X_train, y_train)
 
-
-# Train the model
-dt_classifier.fit(X_train, y_train)
-# Make predictions
-y_pred = dt_classifier.predict(X_test)
-# Evaluate the model
-print("Confusion Matrix:")
+# 9. Initial Model Metrics
+y_pred = pipeline.predict(X_test)
+print("Initial Model Confusion Matrix:")
 print(confusion_matrix(y_test, y_pred))
 print('='*80)
-acc =accuracy_score(y_test, y_pred)
-print("Accuracy", acc)
+print("Initial Model Accuracy:", accuracy_score(y_test, y_pred))
 print('='*80)
-print("Classification Report:")
+print("Initial Model Classification Report:")
 print(classification_report(y_test, y_pred, target_names=y_encoder.classes_))
 print('='*80)
-train_acc = dt_classifier.score(X_train, y_train)
-test_acc = dt_classifier.score(X_test, y_test)
 
-print("Train accuracy:", train_acc)
-print("Test accuracy:", test_acc)
+# 10. Plot Initial Tree using Extracted Attributes
+trained_tree = pipeline.named_steps['classifier']
+encoded_feature_names = pipeline.named_steps['preprocessor'].get_feature_names_out()
 
-'''
-sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
+plt.figure(figsize=(20, 10))
+plot_tree(trained_tree, filled=True, feature_names=encoded_feature_names, class_names=y_encoder.classes_, max_depth=3)
+plt.title("Initial Decision Tree Structure (Capped Depth for Readability)")
 plt.show()
-'''
 
-#Plotting the decision tree
-'''plt.figure(figsize=(20,10))
-plot_tree(dt_classifier, filled=True, feature_names=X.columns, class_names=dt_classifier.classes_)
-plt.show()'''
-
-
-#####################################################################
-
-# Decision tree with grid search
-
-print('='*80)
-print("Decision Tree with Grid Search")
-print('='*80)
-
-param_grid = {
-    'classifier__max_depth': [3, 5, 7, 10,11],
-    'classifier__min_samples_split': [2, 5, 10],
-    'classifier__min_samples_leaf': [1,2,4],
-    'classifier__criterion': ['gini', 'entropy']
-}
-
-
-grid_search = GridSearchCV(estimator=dt_classifier, param_grid=param_grid, cv=5, n_jobs=-1, scoring='f1_macro')
-
-grid_search.fit(X_train, y_train)
-
-best_dt_classifier = grid_search.best_estimator_
-
-
-print('='*80)
-print("Best Parameters:", grid_search.best_params_)
-
-print('Best CV score:', grid_search.best_score_)
-y_pred_gs = best_dt_classifier.predict(X_test)
-
-print("Confusion Matrix:")
-print(confusion_matrix(y_test, y_pred_gs))
-print('='*80)
-acc_gs =accuracy_score(y_test, y_pred_gs)
-print("Accuracy", acc_gs)
-print('='*80)
-print("Classification Report:")
-print(classification_report(y_test, y_pred_gs, target_names=y_encoder.classes_))
-print('='*80)
-train_acc_gs = best_dt_classifier.score(X_train, y_train)
-test_acc_gs = best_dt_classifier.score(X_test, y_test)
-print("Train accuracy:", train_acc_gs)
-print("Test accuracy:", test_acc_gs)
-
+# 11. Feature Importances for the Initial Model
 print('='*80)
 print("Feature Importances for Initial Model:")
 print('='*80)
-feature_names = best_dt_classifier.named_steps['preprocessor'].get_feature_names_out()
-importances = best_dt_classifier.named_steps['classifier'].feature_importances_
-feature_df = pd.Series(importances, index = feature_names).sort_values(ascending=False)
-print(feature_df.head(10))
+initial_importances = pipeline.named_steps['classifier'].feature_importances_
+initial_feature_df = pd.Series(initial_importances, index=encoded_feature_names).sort_values(ascending=False)
+print(initial_feature_df.head(10))
 print('='*80)
 
-
-# AI related analysis
-
-df_ai = df.filter(like='ai', axis=1)
-print(df_ai.columns)
-df_ai['performance_category'] = df['performance_category']
-print('='*80)
-print("AI-related Features:")
-print(df_ai)
+# ==============================================================================
+# DECISION TREE WITH HYPERPARAMETER GRID SEARCH
+# ==============================================================================
+print("Decision Tree with Grid Search Running...")
 print('='*80)
 
-# Plots which AI tools used my students in each performance category
-'''sns.countplot(data=df_ai, x = 'performance_category', hue='ai_tools_used')
-plt.title('Performance Category by AI Usage')
-plt.show()'''
+param_grid = {
+    'classifier__max_depth': [3, 5, 7, 10, 11],
+    'classifier__min_samples_split': [2, 5, 10],
+    'classifier__min_samples_leaf': [1, 2, 4],
+    'classifier__criterion': ['gini', 'entropy']
+}
 
-# Boxplot to show the relation between ai_generated content and performance category
-'''sns.boxplot(data=df_ai, x='ai_generated_content_percentage', y='performance_category')
-plt.title('AI Generated Content vs Performance Category')
-plt.show()'''
+grid_search = GridSearchCV(estimator=pipeline, param_grid=param_grid, cv=5, n_jobs=-1, scoring='f1_macro')
+grid_search.fit(X_train, y_train)
 
+best_pipeline = grid_search.best_estimator_
 
+print("Best Parameters:", grid_search.best_params_)
+print('Best CV Macro F1-Score:', grid_search.best_score_)
+print('='*80)
 
+# 12. Evaluate Optimized Grid Search Model
+y_pred_gs = best_pipeline.predict(X_test)
+print("Optimized Model Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred_gs))
+print('='*80)
+print("Optimized Model Accuracy:", accuracy_score(y_test, y_pred_gs))
+print('='*80)
+print("Optimized Model Classification Report:")
+print(classification_report(y_test, y_pred_gs, target_names=y_encoder.classes_))
+print('='*80)
 
+# 13. Plot Confusion Matrix Heatmap
+sns.heatmap(confusion_matrix(y_test, y_pred_gs), annot=True, fmt='d', cmap='Blues', 
+            xticklabels=y_encoder.classes_, yticklabels=y_encoder.classes_)
+plt.title("Confusion Matrix - Optimized Decision Tree")
+plt.ylabel('Actual Category')
+plt.xlabel('Predicted Category')
+plt.show()
 
-
+# 14. Optimized Feature Importances
+print('='*80)
+print("Feature Importances for Optimized Model:")
+print('='*80)
+gs_encoded_features = best_pipeline.named_steps['preprocessor'].get_feature_names_out()
+gs_importances = best_pipeline.named_steps['classifier'].feature_importances_
+gs_feature_df = pd.Series(gs_importances, index=gs_encoded_features).sort_values(ascending=False)
+print(gs_feature_df.head(10))
+print('='*80)
+print('End of AA_DT.py')'''
