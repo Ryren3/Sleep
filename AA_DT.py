@@ -30,15 +30,17 @@ print(df.describe())
 print('='*80)
 
 # 2. Separate Features and Targets (Dropping target leakage metrics)
+# final_score removed becuase it is a direct numeric representation of the target variable performance_category, and passed is also a direct binary representation of performance_category. Both would lead to perfect predictions without learning any meaningful patterns.
 X = df.drop(columns=['age','gender','student_id', 'final_score', 'passed', 'performance_category'])
+
 
 X = X.astype({
     col: 'object'
     for col in X.select_dtypes(include=['string']).columns
 })
 
-print(pd.crosstab(df['uses_ai'], df['performance_category'], normalize='index') * 100)
-'''# 3. Target Variable Label Encoding
+
+# 3. Target Variable Label Encoding
 y_encoder = LabelEncoder()
 df['performance_category'] = y_encoder.fit_transform(df['performance_category'])
 y = df['performance_category']  
@@ -142,4 +144,4 @@ gs_importances = best_pipeline.named_steps['classifier'].feature_importances_
 gs_feature_df = pd.Series(gs_importances, index=gs_encoded_features).sort_values(ascending=False)
 print(gs_feature_df.head(10))
 print('='*80)
-print('End of AA_DT.py')'''
+print('End of AA_DT.py')

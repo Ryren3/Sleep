@@ -74,7 +74,7 @@ param = {
     "classifier__min_samples_leaf": [1, 2, 4]
 }
 
-model_gs = GridSearchCV(estimator = model, param_grid=param, cv=5, scoring= 'f1_macro' ,n_jobs=-1, verbose=2)
+model_gs = GridSearchCV(estimator = model, param_grid=param, cv=5, scoring= 'f1_macro' ,n_jobs=-1, verbose=1)
 # verbose is a parameter that tracks the progress of the model training in grid search.
 model_gs.fit(X_train, y_train)
 
