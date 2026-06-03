@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Data Analysis on the influence of AI on student academic performance
 
 ## Dataset Description
