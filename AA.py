@@ -96,7 +96,7 @@ plt.show()
 
 # Scatter plot for social media hours vs final score
 
-print(df.info())
+
 plt.figure(figsize=(10, 6))
 plt.scatter(df['social_media_hours'], df['final_score'], alpha=0.5, color='green')
 plt.title('Social Media Hours vs Final Score')
