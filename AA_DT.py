@@ -10,11 +10,15 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.tree import plot_tree
 
+print('='*80)
+print("Starting Decision Tree modeling process...")
+print('='*80)
+
 # 1. Ingest clean dataset
 df = pd.read_csv('cleaned_ai_impact_dataset.csv')
 
 # ==============================================================================
-# 🔥 FIX FOR PANDAS 3.0 & SCIKIT-LEARN TYPE MISMATCH:
+# FIX FOR PANDAS 3.0 & SCIKIT-LEARN TYPE MISMATCH:
 # Find all columns that are read as 'string' or 'object' and cast them explicitly
 # to standard 'object' so scikit-learn's underlying C-extensions can parse them.
 # ==============================================================================
