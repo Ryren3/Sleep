@@ -7,8 +7,12 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from sklearn.tree import plot_tree
+
+print('='*80)
+print("Starting Random Forest modeling process...")
+print('='*80)
 
 df = pd.read_csv('cleaned_ai_impact_dataset.csv')
 
@@ -92,8 +96,8 @@ print(model_gs.best_params_)
 print('='*80)
 print("CV score:", model_gs.best_score_)
 print('='*80)
-print('Training Accuracy:', model_gs.score(X_train, y_train))
-print('Testing Accuracy:', model_gs.score(X_test, y_test))
+print('Training F1 (macro):', f1_score(y_train, model_gs.predict(X_train), average='macro'))
+print('Testing F1 (macro):', f1_score(y_test, y_pred_gs, average='macro'))
 print('='*80)
 print("Feature Importances (GridSearchCV):")
 importances_gs = model_gs.best_estimator_.named_steps['classifier'].feature_importances_
