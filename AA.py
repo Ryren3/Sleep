@@ -3,6 +3,10 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+print('='*80)
+print("Starting data cleaning and EDA process...")
+print('='*80)
+
 df = pd.read_csv('ai_impact_student_performance_dataset.csv')
 print(df.info())
 print('='*80)
@@ -11,10 +15,9 @@ print(pd.crosstab(df['uses_ai'], df['ai_tools_used'].isna(), rownames=['Uses AI'
 print('='*80)
 
 # ==============================================================================
-# 🔥 FIX 1: CALCULATE COHORT MODES OVER THE WHOLE INDEX TO PREVENT MISALIGNMENT
 # ==============================================================================
 mode_tools = df.groupby('performance_category')['ai_tools_used'].transform(
-    lambda x: x.mode()[0] if not x.mode().empty else 'ChatGPT'
+    lambda x: x.mode()[0] if not x.mode().empty else 'ChatGPT+Gemini'
 )
 mode_purpose = df.groupby('performance_category')['ai_usage_purpose'].transform(
     lambda x: x.mode()[0] if not x.mode().empty else 'Exam Prep'
@@ -45,7 +48,7 @@ print(summ_passed)
 print('='*80)
 
 # ==============================================================================
-# 🔥 FIX 2: CONVERT STRING TYPES BEFORE EXPORTING FOR PANDAS 3.0 COMPATIBILITY
+#  CONVERT STRING TYPES BEFORE EXPORTING FOR PANDAS 3.0 COMPATIBILITY
 # ==============================================================================
 for col in df.columns:
     if pd.api.types.is_string_dtype(df[col]):
@@ -64,7 +67,7 @@ print(df2.info())
 print('End of AA.py')
 
 # ==============================================================================
-# VISUALIZATIONS (Executed at the end so calculations and exports are safe)
+# VISUALIZATIONS 
 # ==============================================================================
 plt.figure(figsize=(10, 5))
 plt.hist(df['final_score'], bins=20, color='blue', edgecolor='black')
