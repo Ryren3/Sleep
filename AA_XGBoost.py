@@ -9,6 +9,9 @@ import xgboost as xgb
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
+print('='*80)
+print("Starting XGBoost modeling process...")
+print('='*80)
 
 df = pd.read_csv('cleaned_ai_impact_dataset.csv')
 
