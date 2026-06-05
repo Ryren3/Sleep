@@ -89,3 +89,37 @@ plt.title('Final Scores by Performance Category')
 plt.xlabel('Performance Category')
 plt.ylabel('Final Score')
 plt.show()
+
+#==========================================================
+# Some Information Extraction
+#=========================================================
+
+print('='*80)
+ai_usage_by_category = df2.groupby('performance_category')['ai_generated_content_percentage'].mean()
+print("Average AI-generated content percentage by performance category:")
+print(ai_usage_by_category)
+
+print('='*80)
+ai_dependancy_score_check = df2.groupby('performance_category')['ai_dependency_score'].mean()
+print("Average AI dependancy score by performance category:")
+print(ai_dependancy_score_check)
+
+print('='*80)
+concept_understanding_check = df2.groupby('performance_category')['concept_understanding_score'].mean()
+print("Average concept understanding score by performance category:")
+print(concept_understanding_check)
+
+print('='*80)
+study_habits_check = df2.groupby('performance_category')['study_consistency_index'].mean()
+print("Average study consistency index by performance category:")
+print(study_habits_check)
+
+print('='*80)
+improvement_check = df2.groupby('performance_category')['improvement_rate'].mean()
+print("Average improvement rate by performance category:")
+print(improvement_check)
+
+print('='*80)
+sleep = df2.groupby('performance_category')['sleep_hours'].mean()
+print("Average sleep hours by performance category:")
+print(sleep)
