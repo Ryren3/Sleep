@@ -79,10 +79,7 @@ Features dropped before modeling:
 | `final_score` | Direct numeric representation of the target — leakage |
 | `passed` | Binary derivative of `final_score` — leakage |
 | `last_exam_score` | Highly correlated with target, near-direct proxy — leakage |
-| `assignment_scores_avg` | Same as above — leakage |
-| `concept_understanding_score` | Same as above — leakage |
 
-> **Note on leakage:** Even though `last_exam_score`, `assignment_scores_avg`, and `concept_understanding_score` are not `final_score` itself, they are sufficiently correlated with the target bands that including them causes models to split almost entirely on score thresholds rather than learning behavioral patterns. Feature importance scores confirmed this — those three features alone accounted for 93.6% of all splits in the Decision Tree, 64% in Random Forest, and 33.7% in XGBoost.
 
 **Encoding:** Categorical features (`grade_level`, `ai_tools_used`, `ai_usage_purpose`) were one-hot encoded via a scikit-learn `ColumnTransformer` inside a `Pipeline`, ensuring the encoder was fit only on training data.
 
@@ -159,7 +156,6 @@ The GridSearch selected `max_depth=3`, which aggressively constrains tree depth 
 | Macro F1 (optimized) | 0.73 | 0.81 | **0.81** |
 | High class F1 | 0.61 | 0.72 | **0.71** |
 | Train/Test gap | ~0.00 | 0.157 | **0.054** |
-| Leaky feature dominance | 93.6% | 64.0% | **36.4%** |
 | Interpretability | High | Low | Medium |
 
 **Recommended model: XGBoost.** It matches RF on macro F1, generalizes better (smallest train/test gap), and naturally distributes importance across more features due to its shallow depth regularization — making it more trustworthy for interpreting what actually drives predictions.
