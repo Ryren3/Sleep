@@ -65,6 +65,7 @@ A data integrity check also identified students flagged as `uses_ai = 0` who had
 - `uses_ai` showed near-zero feature importance across all three models, suggesting that simply using AI (yes/no) is not a differentiating factor — what matters more is *how* it is used.
 - Social media hours showed a weak negative correlation with final scores.
 - Study hours showed a moderate positive correlation with final scores.
+- AI content generated is higher for students in the 'Low' category and lower for students in the 'High' category. 
 
 ---
 
@@ -78,8 +79,6 @@ Features dropped before modeling:
 | `age`, `gender` | Excluded from this analysis scope |
 | `final_score` | Direct numeric representation of the target — leakage |
 | `passed` | Binary derivative of `final_score` — leakage |
-| `last_exam_score` | Highly correlated with target, near-direct proxy — leakage |
-
 
 **Encoding:** Categorical features (`grade_level`, `ai_tools_used`, `ai_usage_purpose`) were one-hot encoded via a scikit-learn `ColumnTransformer` inside a `Pipeline`, ensuring the encoder was fit only on training data.
 
@@ -95,19 +94,19 @@ Three tree-based classifiers were trained and tuned using 5-fold cross-validated
 
 ### 1. Decision Tree (DT)
 
-A single decision tree, interpretable but prone to overfitting.
+A single decision tree, interpretable but prone to overfitting. An initial model was used without any hyperparameter tuning and a second decision tree which is optimized ont the best hyperparameters. 
 
 **Best hyperparameters:** `criterion=gini`, `max_depth=7`, `min_samples_leaf=2`, `min_samples_split=2`
 
-| | Initial | Optimized |
+| | Initial Model | Optimized Model |
 |---|---|---|
 | Accuracy | 75.9% | 75.8% |
 | Macro F1 | 0.71 | 0.73 |
-| High F1 | 0.61 | 0.61 |
+| High F1 | 0.59 | 0.61 |
 | Low F1 | 0.74 | 0.80 |
-| Medium F1 | 0.80 | 0.76 |
+| Medium F1 | 0.79 | 0.76 |
 
-The optimized model improved recall for the minority High class (0.33 → 0.85) at the cost of Medium precision — a trade-off driven by `class_weight='balanced'` and the shallower depth constraint.
+F1 scores used for evaluation as it balances both recall and precision. The optimized decision tree model shows it is slightly superior to the initial model. 
 
 ---
 
@@ -120,13 +119,13 @@ An ensemble of 200 decision trees with bagging and feature subsampling.
 | | Initial | Optimized |
 |---|---|---|
 | Training Accuracy | 100% | 96.2% |
-| Testing Accuracy | 81.9% | 80.5% |
+| Testing Accuracy | 81.9% | 84% |
 | Macro F1 | 0.72 | 0.81 |
 | High F1 | 0.48 | 0.72 |
 | Low F1 | 0.81 | 0.83 |
 | Medium F1 | 0.86 | 0.87 |
 
-The initial model perfectly memorized the training data (train score 1.0), a clear sign of overfitting. GridSearch narrowed this gap. RF showed meaningful improvement over DT on the High class, where ensemble averaging reduces variance.
+The initial model perfectly memorized the training data (train score 1.0), a clear sign of overfitting. GridSearch narrowed this gap. RF showed meaningful improvement over DT on the High class, where ensemble averaging reduces variance. This model appears to be superior in classifiying students in the right performance categiry thatn Decsion tree model. 
 
 ---
 
@@ -160,6 +159,8 @@ The GridSearch selected `max_depth=3`, which aggressively constrains tree depth 
 
 **Recommended model: XGBoost.** It matches RF on macro F1, generalizes better (smallest train/test gap), and naturally distributes importance across more features due to its shallow depth regularization — making it more trustworthy for interpreting what actually drives predictions.
 
+**NOTE:** No models ever mistake a 'Low' category student to a 'High' category student and vice versa. Although there are some misclassification to its immediate adjacent hierarchies. Example, 'High' is mistaken as 'Medium' and vice versa and 'Low' is mistaken for 'Medium' and vice versa. This proves that the models are not randomnly guessing the student performance. 
+
 ---
 
 ## Feature Importance Insights
@@ -169,11 +170,8 @@ Across all models and after accounting for leakage concerns, the most consistent
 | Feature | Observation |
 |---|---|
 | `ai_tools_used` (Gemini, ChatGPT+Gemini) | Top AI-related predictors — tool choice matters more than AI usage alone |
-| `ai_usage_purpose_Homework` | Students using AI for homework showed distinct performance patterns |
-| `ai_generated_content_percentage` | Higher AI-generated content correlated with performance differences |
-| `improvement_rate` | Consistent across all models as a behavioral signal |
-| `attendance_percentage` | Traditional engagement metric remains relevant |
-| `study_consistency_index` | Regularity of study more predictive than raw hours |
+| `last_exam_score` | The most relevant feature for classification across all three models |
+| `avg_assignment_score` | The second most relevant feature for classification across all three models  |
 | `social_media_hours` | Weak negative signal |
 | `uses_ai` (binary) | **Zero importance** in all models — whether a student uses AI is less important than how they use it |
 
@@ -181,19 +179,43 @@ Across all models and after accounting for leakage concerns, the most consistent
 
 ## Limitations
 
-**Score-based leakage risk.** `last_exam_score`, `assignment_scores_avg`, and `concept_understanding_score` were identified as near-direct proxies for `performance_category`. When included, they dominate feature importance and mask genuine behavioral signals. The analysis above reflects models where these were retained — results should be interpreted with this caveat. Ideally, a separate model trained without these features would better isolate the contribution of AI usage and lifestyle factors.
-
 **Class imbalance.** The High category (9.4% of data, 151 test samples) is underrepresented. Even with `class_weight='balanced'`, all models struggle to predict High-performing students reliably. A broader dataset with more High-category students would improve minority class performance.
 
 **Imputation assumption.** Missing `ai_tools_used` and `ai_usage_purpose` values for active AI users were filled with the within-cohort mode. This preserves group-level distributions but may introduce bias for individual students who genuinely used a different tool or purpose.
 
 **Binary `uses_ai` signal.** The `uses_ai` flag had zero importance in every model, which may partly reflect how it was constructed — students with tool names but `uses_ai=0` were corrected, but the underlying data collection process may have introduced inconsistencies that dilute this feature's signal.
 
-**Cross-sectional snapshot.** The dataset captures a single point in time. Performance trends, changes in AI adoption habits, and the cumulative effect of AI usage over a semester cannot be captured by this model.
-
 **Generalizability.** The dataset contains students from mixed grade levels (10th, 11th, 12th, 1st–3rd Year university). No subgroup analysis was performed — it is possible that AI usage has different effects at different educational stages.
 
 **No causal inference.** All findings are associative. A student using Gemini for homework assistance performing better does not mean Gemini caused that performance. Confounding factors (motivation, prior ability, access to resources) are not fully controlled for.
+
+---
+## Analysis
+
+### 1. Model Trade-offs and Strategic Deployment
+
+The optimized XGBoost and Random Forest architectures represent the peak of global predictive performance, both achieving a dominant Macro F1-score of 81%. However, selecting the "ideal" model is not a purely mathematical choice; it shifts dynamically based on the strategic priorities of educational professionals:
+
+* **Scenario A: Comprehensive Population Mapping (Deploy XGBoost):** If an institution prioritizes system-wide operational accuracy and balanced classification across the entire student body, **XGBoost** is the optimal choice. It yields the highest stability and accuracy for the baseline majority cohort, capturing **90% of Medium-performing students** (845 out of 941) while maintaining a highly regularized, low-variance footprint (the lowest train/test gap at 5.4%).
+* **Scenario B: Aggressive "Zero-Tolerance" Intervention (Deploy Decision Tree):** If an institution’s core mandate is to maximize support for vulnerable cohorts—either to elevate the school's overall performance metrics or to ensure no student fails—the **Optimized Decision Tree** is the superior tool. Despite a lower overall Macro F1-score (72%), the single tree acts as an aggressive diagnostic net, achieving a peak **Recall of 90% for the Low performance category** (capturing 459 out of 508 at-risk students). It generates more false alarms, but it minimizes the dangerous error of leaving a struggling student unnoticed.
+
+---
+
+### 2. Feature Importance vs. Operational Utility
+
+Across all three modeling frameworks, a clear hierarchy emerges regarding feature importance, but a stark divide exists between predictive power and real-world utility:
+
+#### The Mathematical Hierarchy
+The algorithms heavily anchor their decision-making on three core academic pillars: `last_exam_score`, `assignment_scores_avg`, and `concept_understanding_score`. In the sequential XGBoost framework, this structural reliance undergoes a telling adjustment: `cat__ai_tools_used_Gemini` replaces `concept_understanding_score` in the top flight.
+
+#### The Operational Reality
+From a practical instructional standpoint, there is a fundamental difference in how these features can be leveraged:
+
+* **`concept_understanding_score` (The Abstract Metric):** This variable is highly abstract, subjective, varies significantly from student to student, and is usually only uncovered *after* a major assessment has been completed. It is a lagging indicator that is operationally difficult to monitor in real time.
+* **`last_exam_score` & `assignment_scores_avg` (The Actionable Trackers):** These features represent concrete, objective, and continuously updated transactional data automatically logged by school administration databases. 
+
+#### Direct Prescriptive Impact
+By tracking continuous assignment averages and prior exam performance, educators and counselors can build a dynamic **Early Warning System (EWS)**. Prior exam scores allow institutions to identify baseline vulnerabilities on day one of a semester, while running assignment averages act as live telemetry. This empowers professionals to execute timely, prescriptive interventions—such as targeted homework clinics or prerequisite review sessions—proactively redirecting a student's academic trajectory before they drift into a lower performance category.
 
 ---
 
